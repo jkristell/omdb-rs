@@ -1,49 +1,64 @@
-use hyper::Url;
-use hyper::client::{Response, Client};
-use hyper::net::HttpsConnector;
-use hyper_native_tls::NativeTlsClient;
+
+//use hyper::Url;
+//use hyper::client::{Response, Client};
+//use hyper::net::HttpsConnector;
+//use hyper_native_tls::NativeTlsClient;
+//use hyper::status::StatusCode;
+
+use reqwest;
+
 use {Movie, Kind, Plot, Error, SearchResults};
-use hyper::status::StatusCode;
 use serde_json;
+use serde;
 use std::borrow::Borrow;
 
 mod model;
 use self::model::{FindResponse, SearchResponse};
 
-lazy_static! {
-    static ref CLIENT: Client = Client::with_connector(HttpsConnector::new(NativeTlsClient::new().unwrap()));
-}
+//lazy_static! {
+//    static ref CLIENT: Client = Client::with_connector(HttpsConnector::new(NativeTlsClient::new().unwrap()));
+//}
 
 /// A function to create and send a request to OMDb.
-fn get_request<I, K, V>(params: I) -> Result<Response, Error>
+fn get_request<I, K, V>(params: I) -> Result<reqwest::Response, reqwest::Error>
     where I: IntoIterator,
-          I::Item: Borrow<(K, V)>,
-          K: AsRef<str>,
-          V: AsRef<str>
+          I::Item: Borrow<(K, V)> + serde::Serialize,
+          K: AsRef<str> + serde::Serialize,
+          V: AsRef<str> + serde::Serialize
 {
     const API_ENDPOINT: &'static str = "https://omdbapi.com";
     const API_VERSION: &'static str = "1";
 
     // Make the url
-    let mut url = match Url::parse(API_ENDPOINT) {
-        Ok(url) => url,
-        Err(_) => return Err(Error::Other("url parsing error")),
-    };
+    //let mut url = match Url::parse(API_ENDPOINT) {
+    //    Ok(url) => url,
+    //    Err(_) => return Err(Error::Other("url parsing error")),
+    //};
 
-    url.query_pairs_mut()
-        .append_pair("v", API_VERSION)
-        .append_pair("r", "json")
-        .extend_pairs(params);
+    //url.query_pairs_mut()
+    //    .append_pair("v", API_VERSION)
+    //    .append_pair("r", "json")
+    //    .extend_pairs(params);
 
     // Create and send the get request
-    let res = CLIENT.get(url).send()?;
+    //let res = CLIENT.get(url).send()?;
+
+    let params = params.into_iter().collect::<Vec<_>>();
+
+    let request = reqwest::Client::new()
+                    .get(API_ENDPOINT)
+                    .query(&("v", API_VERSION))
+                    .query(&("r", "json"))
+                    .query(&params)
+                    .send();
+
 
     // Return status error if status isn't Ok
-    if res.status != StatusCode::Ok {
-        return Err(Error::Status(res.status));
-    }
+    //if res.status != StatusCode::Ok {
+    //    return Err(Error::Status(res.status));
+    //}
 
-    Ok(res)
+    request
 }
 
 /// Starts a new `FindQuery` with an imdb_id.
@@ -157,7 +172,7 @@ impl FindQuery {
 
     /// Perform OMDb Api request and attempt to find the movie
     /// this `FindQuery` is describing.
-    pub fn get(&self) -> Result<Movie, Error> {
+    pub fn get(&self) -> Result<Movie, reqwest::Error> {
 
         let mut params: Vec<(&str, String)> = Vec::new();
 
@@ -182,15 +197,15 @@ impl FindQuery {
         }
 
         // Send our request
-        let response = try!(get_request(params));
+        let response = get_request(params)?;
 
         // Deserialize the response into our catch-all FindResponse struct
-        let data: FindResponse = try!(serde_json::from_reader(response));
+        let data: FindResponse = serde_json::from_reader(response).unwrap();
 
         // Check if the Api's Response string equals true
         if data.response.to_lowercase() != "true" {
             // Return with the Api's Error field or "undefined" if empty
-            return Err(Error::Api(data.error.unwrap_or("undefined".to_owned())));
+            //return Err(Error::Api(data.error.unwrap_or("undefined".to_owned())));
         }
 
         Ok(data.into())
@@ -242,7 +257,7 @@ impl SearchQuery {
 
     /// Perform OMDb Api request and attempt to find the movie
     /// this `FindQuery` is describing.
-    pub fn get(&self) -> Result<SearchResults, Error> {
+    pub fn get(&self) -> Result<SearchResults, reqwest::Error> {
 
         let mut params: Vec<(&str, String)> = Vec::new();
 
@@ -262,15 +277,15 @@ impl SearchQuery {
         }
 
         // Send our request
-        let response = try!(get_request(params));
+        let response = get_request(params)?;
 
         // Deserialize the response into our catch-all FindResponse struct
-        let data: SearchResponse = try!(serde_json::from_reader(response));
+        let data: SearchResponse = serde_json::from_reader(response).unwrap();
 
         // Check if the Api's Response string equals true
         if data.response.to_lowercase() != "true" {
             // Return with the Api's Error field or "undefined" if empty
-            return Err(Error::Api(data.error.unwrap_or("undefined".to_owned())));
+            //return Err(Error::Api(data.error.unwrap_or("undefined".to_owned())));
         }
 
         Ok(data.into())
