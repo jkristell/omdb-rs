@@ -47,8 +47,8 @@ fn get_request<I, K, V>(params: I) -> Result<reqwest::Response, reqwest::Error>
 
     let request = reqwest::Client::new()
                     .get(API_ENDPOINT)
-                    .query(&("v", API_VERSION))
-                    .query(&("r", "json"))
+                    .query(&[("v", API_VERSION)])
+                    .query(&[("r", "json")])
                     .query(&params)
                     .send();
 
