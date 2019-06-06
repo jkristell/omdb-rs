@@ -2,38 +2,38 @@
 use reqwest;
 
 use {Movie, Kind, Plot, Error, SearchResults};
-use serde;
+use serde::Serialize;
 use std::borrow::Borrow;
 
 mod model;
 use self::model::{FindResponse, SearchResponse};
 
 /// A function to create and send a request to OMDb.
-fn get_request<I, K, V>(params: I) -> Result<reqwest::Response, reqwest::Error>
+fn get_request<I, K, V>(params: I) -> Result<reqwest::Response, Error>
     where I: IntoIterator,
-          I::Item: Borrow<(K, V)> + serde::Serialize,
-          K: AsRef<str> + serde::Serialize,
-          V: AsRef<str> + serde::Serialize
+          I::Item: Borrow<(K, V)> + Serialize,
+          K: AsRef<str> + Serialize,
+          V: AsRef<str> + Serialize
 {
     const API_ENDPOINT: &'static str = "https://omdbapi.com";
     const API_VERSION: &'static str = "1";
 
     let params = params.into_iter().collect::<Vec<_>>();
 
-    let request = reqwest::Client::new()
+    let response = reqwest::Client::new()
                     .get(API_ENDPOINT)
                     .query(&[("v", API_VERSION)])
                     .query(&[("r", "json")])
                     .query(&params)
-                    .send();
+                    .send()?;
 
+    let status = response.status();
 
-    // Return status error if status isn't Ok
-    //if res.status != StatusCode::Ok {
-    //    return Err(Error::Status(res.status));
-    //}
+    if !status.is_success() {
+        return Err(Error::Status(status));
+    }
 
-    request
+    Ok(response)
 }
 
 /// Starts a new `FindQuery` with an imdb_id.
@@ -46,7 +46,9 @@ fn get_request<I, K, V>(params: I) -> Result<reqwest::Response, reqwest::Error>
 /// Find a movie using it's IMDb id:
 ///
 /// ```
+/// let apikey = std::env::var("OMDB_APIKEY").expect("OMDB_APIKEY must be set");
 /// let movie = omdb::imdb_id("tt0032138")
+///     .apikey(apikey)
 /// 	.year(1939)
 /// 	.get()
 /// 	.unwrap();
@@ -68,8 +70,10 @@ pub fn imdb_id<S: Into<String>>(title: S) -> FindQuery {
 ///
 /// ```
 /// use omdb::Kind;
+/// let apikey = std::env::var("OMDB_APIKEY").expect("OMDB_APIKEY must be set");
 ///
 /// let show = omdb::title("Silicon Valley")
+///     .apikey(apikey)
 /// 	.year(2014)
 /// 	.kind(Kind::Series)
 /// 	.get()
@@ -92,7 +96,8 @@ pub fn title<S: Into<String>>(title: S) -> FindQuery {
 /// Search for movies:
 ///
 /// ```
-/// let movies = omdb::search("batman").get().unwrap();
+/// let apikey = std::env::var("OMDB_APIKEY").expect("OMDB_APIKEY must be set");
+/// let movies = omdb::search("batman").apikey(apikey).get().unwrap();
 ///
 /// assert!(movies.total_results > 0);
 /// ```
@@ -155,7 +160,7 @@ impl FindQuery {
 
     /// Perform OMDb Api request and attempt to find the movie
     /// this `FindQuery` is describing.
-    pub fn get(&self) -> Result<Movie, reqwest::Error> {
+    pub fn get(&self) -> Result<Movie, Error> {
 
         let mut params: Vec<(&str, String)> = Vec::new();
 
@@ -189,7 +194,7 @@ impl FindQuery {
         // Check if the Api's Response string equals true
         if response.response.to_lowercase() != "true" {
             // Return with the Api's Error field or "undefined" if empty
-            //return Err(Error::Api(data.error.unwrap_or("undefined".to_owned())));
+            return Err(Error::Api(response.error.unwrap_or("undefined".to_owned())));
         }
 
         Ok(response.into())
@@ -250,7 +255,7 @@ impl SearchQuery {
 
     /// Perform OMDb Api request and attempt to find the movie
     /// this `FindQuery` is describing.
-    pub fn get(&self) -> Result<SearchResults, reqwest::Error> {
+    pub fn get(&self) -> Result<SearchResults, Error> {
 
         let mut params: Vec<(&str, String)> = Vec::new();
 
@@ -276,12 +281,10 @@ impl SearchQuery {
         // Send our request
         let response: SearchResponse = get_request(params)?.json()?;
 
-        println!("{:?}", response);
-
         // Check if the Api's Response string equals true
         if response.response.to_lowercase() != "true" {
             // Return with the Api's Error field or "undefined" if empty
-            //return Err(Error::Api(data.error.unwrap_or("undefined".to_owned())));
+            return Err(Error::Api(response.error.unwrap_or("undefined".to_owned())));
         }
 
         Ok(response.into())

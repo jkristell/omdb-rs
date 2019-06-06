@@ -116,9 +116,6 @@ mod tests {
     use std::env;
     use Kind;
 
-
-
-
     #[test]
     fn imdb_id() {
 
@@ -129,8 +126,6 @@ mod tests {
             .year(1939)
             .get()
             .unwrap();
-
-        println!("{:?}", movie);
 
         assert!(movie.title == "The Wizard of Oz");
     }
